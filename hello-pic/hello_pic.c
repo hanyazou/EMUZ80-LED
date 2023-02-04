@@ -546,6 +546,25 @@ void main(void) {
     LATE1 = 1;		// Release reset
 
     printf("Hello, PIC world!\n\r");
+    TRISC = TRISC & 0xf8;	// set RC0~2 as output
+    LATC0 = 1;
+    LATC1 = 1;
+    LATC2 = 1;
+    LATE2 = 1;
+    while (1) {
+	    LATC0 = 0;
+	    __delay_ms(1000);
+	    LATC0 = 1;
+	    LATC1 = 0;
+	    __delay_ms(1000);
+	    LATC1 = 1;
+	    LATC2 = 0;
+	    __delay_ms(1000);
+	    LATC2 = 1;
+	    LATE2 = 0;
+	    __delay_ms(1000);
+	    LATE2 = 1;
+    }
 
     while(1);
 };
