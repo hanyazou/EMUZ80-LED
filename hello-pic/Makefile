@@ -6,8 +6,8 @@ PIC := 18F47Q43
 
 all: upload
 
-hello_pic.hex: hello_pic.c
-	$(XC8) --chip=$(PIC) hello_pic.c
+hello_pic.hex: hello_pic.c SPI.c
+	$(XC8) --chip=$(PIC) hello_pic.c SPI.c
 
 upload: hello_pic.hex
 	cd $(PP3_DIR); ./pp3 -c $(PORT) -s 1700 -v 2 -t $(PIC) $(CWD)/hello_pic.hex
