@@ -545,6 +545,8 @@ void main(void) {
 
     LATE1 = 1;		// Release reset
 
+    printf("Hello, PIC world!\n\r");
+
     while(1);
 };
 
