@@ -80,7 +80,8 @@
 
 #include <xc.h>
 #include <stdio.h>
-#include "SPI.h"
+#include "SDCard.h"
+#include "utils.h"
 
 #define Z80_CLK 2500000UL	// Z80 clock frequency(Max 16MHz)
 
@@ -358,56 +359,6 @@ void __interrupt(irq(CLC1),base(8)) CLC_ISR(){
     G3POL = 0;
 }
 
-void SPI_test(void)
-{
-	uint8_t buf[16];
-	printf("\n\rtest SPI ...\n\r");
-	SPI_begin();
-
-	SPI_configure(SPI_CLOCK_100KHZ, SPI_MSBFIRST, SPI_MODE0);
-	SPI_begin_transaction();
-	SPI_dummy_clocks(10);
-	SPI_end_transaction();
-
-	// CMD0
-	SPI_begin_transaction();
-	SPI_dummy_clocks(1);
-	buf[0] = 0x40;  // CMD0
-	buf[1] = 0x00;
-	buf[2] = 0x00;
-	buf[3] = 0x00;
-	buf[4] = 0x00;
-	buf[5] = 0x95;  // CRC
-	SPI_send(buf, 6);
-	SPI_dummy_clocks(1);
-	buf[0] = SPI_receive_byte();
-	SPI_end_transaction();
-	printf("send CMD0, R1=%02x\n\r", buf[0]);
-
-	SPI_configure(SPI_CLOCK_2MHZ, SPI_MSBFIRST, SPI_MODE0);
-
-	// CMD8
-	SPI_begin_transaction();
-	SPI_dummy_clocks(1);
-	buf[0] = 0x48;  // CMD8
-	buf[1] = 0x00;
-	buf[2] = 0x00;
-	buf[3] = 0x01;
-	buf[4] = 0xaa;
-	buf[5] = 0x87;  // CRC
-	SPI_send(buf, 6);
-	SPI_dummy_clocks(1);
-	buf[0] = SPI_receive_byte();
-	if (buf[0] == 0x01) {
-		SPI_receive(&buf[1], 4);
-	} else {
-		SPI_memset(&buf[1], 0x00, 4);
-	}
-	SPI_end_transaction();
-	printf("send CMD8, R7=%02x %02x %02x %02x %02x\n\r",
-	       buf[0], buf[1], buf[2], buf[3], buf[4]);
-}
-
 // main routine
 void main(void) {
 	int i;
@@ -587,7 +538,14 @@ void main(void) {
     GIE = 1;		// Global interrupt enable
 
 #if 1
-    SPI_test();
+    SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_2MHZ, /* timeout */ 100);
+    {
+	    static uint8_t buf[512];
+	    if (SDCard_read512(32768, buf) != SDCARD_SUCCESS)
+		    printf("read failed\n\r");
+	    else
+		    util_hexdump("", buf, 512);
+    }
 #else
 	ledwrite(0x0F, 0x00);	// display test , normal operation
 	ledwrite(0x0A, 0x00);	// Intensity , Duty Cycle 0x00=1/32 .. 0x0F=31/32
