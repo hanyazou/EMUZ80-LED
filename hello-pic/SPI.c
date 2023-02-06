@@ -298,6 +298,18 @@ void SPI_end_transaction(void)
 
 void SPI_dummy_clocks(int clocks)
 {
+    if (ctx->clock_delay == 0) {
+        SPI_PICO = 1;
+        clocks *= 8;
+
+        while (clocks--) {
+            SPI_CLK = 1;
+            asm("nop");
+            SPI_CLK = 0;
+        }
+        return;
+    }
+
     uint8_t dummy = 0xff;
     for (int i = 0; i < clocks; i++) {
         SPI_send(&dummy, 1);
