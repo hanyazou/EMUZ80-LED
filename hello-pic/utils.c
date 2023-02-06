@@ -29,7 +29,7 @@ void util_hexdump(const char *header, void *addr, int size)
 {
     char chars[17];
     uint8_t *buf = addr;
-    for (int i = 0; i < 512; i++) {
+    for (int i = 0; i < size; i++) {
         if ((i % 16) == 0)
             printf("%s%04x:", header, i);
         printf(" %02x", buf[i]);
