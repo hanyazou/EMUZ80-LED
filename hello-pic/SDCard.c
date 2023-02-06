@@ -110,11 +110,19 @@ int SDCard_init(uint16_t initial_clock_delay, uint16_t clock_delay, uint16_t tim
     return SDCARD_SUCCESS;
 }
 
+static int __SDCard_wait_response(uint8_t no_response, int attempts)
+{
+    uint8_t response;
+    do {
+        response = SPI_receive_byte();
+    } while ((response == no_response) && 0 < --attempts);
+    return response;
+}
+
 static int __SDCard_command_r1(uint8_t command, uint32_t argument, uint8_t *r1)
 {
     uint8_t buf[6];
     uint8_t response;
-    uint16_t timeout;
 
     buf[0] = command | 0x40;
     buf[1] = (argument >> 24) & 0xff;
@@ -127,20 +135,16 @@ static int __SDCard_command_r1(uint8_t command, uint32_t argument, uint8_t *r1)
     SPI_dummy_clocks(1);
     SPI_send(buf, 6);
 
-    timeout = ctx->timeout;
-    do {
-        response = SPI_receive_byte();
-    } while ((response & 0x80) && 0 < --timeout);
-
+    response = __SDCard_wait_response(0xff, ctx->timeout);
     *r1 = response;
-    if (response & 0x80) {
+    if (response == 0xff) {
         return SDCARD_TIMEOUT;
     }
 
     return SDCARD_SUCCESS;
 }
 
-int SDCard_read512(uint32_t addr, void *buf)
+int SDCard_read512(uint32_t addr, int offs, void *buf, int count)
 {
     int result;
     uint8_t response;
@@ -154,19 +158,63 @@ int SDCard_read512(uint32_t addr, void *buf)
         goto done;
     }
 
-    for (int i = 0; i < 3000; i++) {
-        response = SPI_receive_byte();
-        if (response != 0xff)
-            break;
-    }
+    response = __SDCard_wait_response(0xff, 3000);
     if (response == 0xff) {
         result = SDCARD_TIMEOUT;
         goto done;
     }
     if (response == 0xfe) {
-        SPI_receive(buf, 512);
+        SPI_dummy_clocks(offs);
+        SPI_receive(buf, count);
+        SPI_dummy_clocks(512 - offs - count);
     } else {
         result = SDCARD_BADRESPONSE;
+        goto done;
+    }
+
+    result = SDCARD_SUCCESS;
+
+ done:
+    SPI_end_transaction();
+    return result;
+}
+
+int SDCard_write512(uint32_t addr, int offs, void *buf, int count)
+{
+    int result;
+    uint8_t response;
+
+    result = __SDCard_command_r1(24, addr, &response);
+    if (result != SDCARD_SUCCESS) {
+        goto done;
+    }
+    if (response != 0) {
+        result = SDCARD_BADRESPONSE;
+        goto done;
+    }
+
+    response = 0xfe;
+    SPI_send(&response, 1);
+    SPI_dummy_clocks(offs);
+    SPI_send(buf, count);
+    SPI_dummy_clocks(512 - offs - count);
+
+    response = __SDCard_wait_response(0xff, 3000);
+    if (response == 0xff) {
+        dprintf(("SD Card: write512: failed to get token, timeout\n\r"));
+        result = SDCARD_TIMEOUT;
+        goto done;
+    }
+    if ((response & 0x1f) != 0x05) {
+        dprintf(("SD Card: write512: token is %02x\n\r", response));
+        result = SDCARD_BADRESPONSE;
+        goto done;
+    }
+
+    response = __SDCard_wait_response(0x00, 3000);
+    if (response == 0x00) {
+        dprintf(("SD Card: write512: timeout, response is %02x\n\r", response));
+        result = SDCARD_TIMEOUT;
         goto done;
     }
 

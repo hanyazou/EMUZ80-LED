@@ -80,6 +80,7 @@
 
 #include <xc.h>
 #include <stdio.h>
+#include <string.h>
 #include "SDCard.h"
 #include "utils.h"
 
@@ -540,11 +541,29 @@ void main(void) {
 #if 1
     SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_2MHZ, /* timeout */ 100);
     {
-	    static uint8_t buf[512];
-	    if (SDCard_read512(32768, buf) != SDCARD_SUCCESS)
+	    static uint8_t buf[128];
+	    if (SDCard_read512(8192, 0, buf, 128) != SDCARD_SUCCESS)
 		    printf("read failed\n\r");
 	    else
-		    util_hexdump("", buf, 512);
+		    util_hexdump("", buf, 128);
+	    if (SDCard_read512(32768, 0, buf, 128) != SDCARD_SUCCESS)
+		    printf("read failed\n\r");
+	    else
+		    util_hexdump("", buf, 128);
+	    if (buf[0] == 'H') {
+		    memset(buf, 0x00, sizeof(buf));
+	    } else{
+		    memset(buf, 0xa5, sizeof(buf));
+		    buf[0] = 'H';
+		    buf[1] = 'e';
+		    buf[2] = 'l';
+		    buf[3] = 'l';
+		    buf[4] = 'o';
+		    buf[126] = 0x55;
+		    buf[127] = 0xaa;
+	    }
+	    if (SDCard_write512(32768, 0, buf, 128) != SDCARD_SUCCESS)
+		    printf("write failed\n\r");
     }
 #else
 	ledwrite(0x0F, 0x00);	// display test , normal operation
