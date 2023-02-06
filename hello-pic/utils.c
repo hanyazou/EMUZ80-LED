@@ -25,7 +25,7 @@
 #include <stdio.h>
 #include "utils.h"
 
-void util_hexdump(char *header, void *addr, int size)
+void util_hexdump(const char *header, void *addr, int size)
 {
     char chars[17];
     uint8_t *buf = addr;

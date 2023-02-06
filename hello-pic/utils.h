@@ -24,6 +24,6 @@
 #ifndef __UTILS_H__
 #define __UTILS_H__
 
-void util_hexdump(char *header, void *addr, int size);
+void util_hexdump(const char *header, void *addr, int size);
 
 #endif  // __UTILS_H__
