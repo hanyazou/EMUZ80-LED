@@ -296,14 +296,6 @@ void SPI_end_transaction(void)
     TRISC = ctx->trisc;  // restore direction settings
 }
 
-void SPI_memset(void *buf, int val, int count)
-{
-    uint8_t *p = (uint8_t*)buf;
-    for (int i = 0; i < count; i++) {
-        *p++ = (uint8_t)(val & 0xff);
-    }
-}
-
 void SPI_dummy_clocks(int clocks)
 {
     uint8_t dummy = 0xff;

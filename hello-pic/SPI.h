@@ -43,7 +43,6 @@ void SPI_end_transaction(void);
 void SPI_send_mode0_msbfirst_nowait(void *buf, int count);
 void SPI_receive_mode0_msbfirst_nowait(void *buf, int count);
 
-void SPI_memset(void *buf, int val, int count);
 void SPI_dummy_clocks(int clocks);
 uint8_t SPI_receive_byte(void);
 uint8_t SPI_reserve_bit_order(uint8_t val);
