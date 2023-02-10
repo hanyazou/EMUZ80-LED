@@ -26,7 +26,7 @@
 #include "SPI.h"
 #include "SDCard.h"
 
-#define SDCARD_DEBUG
+// #define SDCARD_DEBUG
 #if defined(SDCARD_DEBUG)
 #define dprintf(args) do { printf args; } while(0)
 #else
