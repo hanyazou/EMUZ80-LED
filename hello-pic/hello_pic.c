@@ -81,8 +81,8 @@
 #include <xc.h>
 #include <stdio.h>
 #include <string.h>
+#include "ff.h"
 #include "SDCard.h"
-#include "utils.h"
 
 #define Z80_CLK 2500000UL	// Z80 clock frequency(Max 16MHz)
 
@@ -541,29 +541,57 @@ void main(void) {
 #if 1
     SDCard_init(SPI_CLOCK_100KHZ, SPI_CLOCK_2MHZ, /* timeout */ 100);
     {
-	    static uint8_t buf[128];
-	    if (SDCard_read512(8192, 0, buf, 128) != SDCARD_SUCCESS)
-		    printf("read failed\n\r");
-	    else
-		    util_hexdump("", buf, 128);
-	    if (SDCard_read512(32768, 0, buf, 128) != SDCARD_SUCCESS)
-		    printf("read failed\n\r");
-	    else
-		    util_hexdump("", buf, 128);
-	    if (buf[0] == 'H') {
-		    memset(buf, 0x00, sizeof(buf));
-	    } else{
-		    memset(buf, 0xa5, sizeof(buf));
-		    buf[0] = 'H';
-		    buf[1] = 'e';
-		    buf[2] = 'l';
-		    buf[3] = 'l';
-		    buf[4] = 'o';
-		    buf[126] = 0x55;
-		    buf[127] = 0xaa;
+	    static FATFS fs;
+	    FILINFO Finfo;
+	    DIR dirs;
+
+	    if (f_mount(&fs, "0://", 1) != FR_OK) {
+		    printf("f_mount(): ERROR\n\r");
 	    }
-	    if (SDCard_write512(32768, 0, buf, 128) != SDCARD_SUCCESS)
-		    printf("write failed\n\r");
+	    if (f_opendir(&dirs, "/") != FR_OK) {
+		    printf("f_opendir(): ERROR\n\r");
+	    }
+	    do {
+		    if (f_readdir(&dirs, &Finfo) != FR_OK) {
+			    printf("f_readdir(): ERROR\n\r");
+			    break;
+		    }
+		    if (Finfo.fname[0] == '\0')
+			    break;
+		    printf("%s%s\n\r", Finfo.fname, (Finfo.fattrib & AM_DIR) ? "/" : "");
+	    } while(1);
+
+	    static FIL file;
+	    static uint8_t buf[128];
+	    unsigned int n;
+	    if (f_open(&file, "/HELLOFAT.TXT", FA_READ|FA_WRITE) != FR_OK) {
+		    printf("f_open(): ERROR\n\r");
+	    }
+	    if (f_read(&file, buf, sizeof(buf), &n) != FR_OK) {
+		    printf("f_read(): ERROR\n\r");
+	    }
+	    buf[n] = '\0';
+	    for (char *p = buf; *p; p++) {
+		    if (*p == 0x0d || *p == 0x0a)
+			    *p = ' ';
+	    }
+	    printf("/HELLOFAT.TXT: %d bytes, \"%s\"\n\r", n, buf);
+	    if (f_lseek(&file, 0) != FR_OK) {
+		    printf("f_lseek(): ERROR\n\r");
+	    }
+	    if (buf[0] == 'H') {
+		    sprintf(buf, "Good bye, FAT world!\n");
+	    } else {
+		    sprintf(buf, "Hello, FAT world!\n");
+	    }
+	    if (f_truncate(&file) != FR_OK) {
+		    printf("f_truncate(): ERROR\n\r");
+	    }
+	    printf("f_write(): %s\n\r", buf);
+	    if (f_write (&file, buf, strlen(buf), &n) != FR_OK || n != strlen(buf)) {
+		    printf("f_write(): ERROR\n\r");
+	    }
+	    f_close(&file);
     }
 #else
 	ledwrite(0x0F, 0x00);	// display test , normal operation
