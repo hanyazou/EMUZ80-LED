@@ -44,6 +44,6 @@ int SDCard_read512(uint32_t addr, int offs, void *buf, int count);
 int SDCard_write512(uint32_t addr, int offs, void *buf, int count);
 uint8_t SDCard_crc(void *buf, int count);
 uint16_t SDCard_crc16(void *buf, int count);
-
+uint16_t __SDCard_crc16(uint16_t crc, void *buf, int count);
 
 #endif  // __SDCARD_H__

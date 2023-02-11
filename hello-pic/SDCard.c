@@ -103,6 +103,13 @@ int SDCard_init(uint16_t initial_clock_delay, uint16_t clock_delay, uint16_t tim
     }
     dprintf(("SD Card: ready.\n\r"));
 
+    // CMD59 turn on CRC
+    SDCard_command(59, 1, buf, 1);
+    if (buf[0] != 0x00) {
+        dprintf(("SD Card: CMD59 response is %02x\n\r", buf[0]));
+        return SDCARD_BADRESPONSE;
+    }
+
     SPI_configure(ctx->clock_delay, SPI_MSBFIRST, SPI_MODE0);
 
     dprintf(("SD Card: initialize ... succeeded\n\r"));
@@ -148,7 +155,10 @@ int SDCard_read512(uint32_t addr, int offs, void *buf, int count)
 {
     int result;
     uint8_t response;
+    uint16_t crc, resp_crc;
+    int retry = 5;
 
+ retry:
     result = __SDCard_command_r1(17, addr, &response);
     if (result != SDCARD_SUCCESS) {
         goto done;
@@ -163,13 +173,34 @@ int SDCard_read512(uint32_t addr, int offs, void *buf, int count)
         result = SDCARD_TIMEOUT;
         goto done;
     }
-    if (response == 0xfe) {
-        SPI_dummy_clocks(offs);
-        SPI_receive(buf, count);
-        SPI_dummy_clocks(512 - offs - count);
-    } else {
+    if (response != 0xfe) {
         result = SDCARD_BADRESPONSE;
         goto done;
+    }
+
+    crc = 0;
+    for (int i = 0; i < offs; i++) {
+        response = SPI_receive_byte();
+        crc = __SDCard_crc16(crc, &response, 1);
+    }
+    SPI_receive(buf, count);
+    crc = __SDCard_crc16(crc, buf, count);
+    for (int i = 0; i < 512 - offs - count; i++) {
+        response = SPI_receive_byte();
+        crc = __SDCard_crc16(crc, &response, 1);
+    }
+
+    resp_crc = SPI_receive_byte() << 8;
+    resp_crc |= SPI_receive_byte();
+    if (resp_crc != crc) {
+        dprintf(("SD Card: read512: CRC error (%04x != %04x, retry=%d)\n\r",
+                 crc, resp_crc, retry));
+        if (--retry < 1) {
+            result = SDCARD_CRC_ERROR;
+            goto done;
+        }
+        SPI_end_transaction();
+        goto retry;
     }
 
     result = SDCARD_SUCCESS;
@@ -183,7 +214,20 @@ int SDCard_write512(uint32_t addr, int offs, void *buf, int count)
 {
     int result;
     uint8_t response;
+    uint16_t crc;
+    int retry = 5;
 
+    crc = 0;
+    response = 0xff;
+    for (int i = 0; i < offs; i++) {
+        crc = __SDCard_crc16(crc, &response, 1);
+    }
+    crc = __SDCard_crc16(crc, buf, count);
+    for (int i = 0; i < 512 - offs - count; i++) {
+        crc = __SDCard_crc16(crc, &response, 1);
+    }
+
+ retry:
     result = __SDCard_command_r1(24, addr, &response);
     if (result != SDCARD_SUCCESS) {
         goto done;
@@ -198,6 +242,10 @@ int SDCard_write512(uint32_t addr, int offs, void *buf, int count)
     SPI_dummy_clocks(offs);
     SPI_send(buf, count);
     SPI_dummy_clocks(512 - offs - count);
+    response = (crc >> 8) & 0xff;
+    SPI_send(&response, 1);
+    response = crc & 0xff;
+    SPI_send(&response, 1);
 
     response = __SDCard_wait_response(0xff, 3000);
     if (response == 0xff) {
@@ -207,11 +255,21 @@ int SDCard_write512(uint32_t addr, int offs, void *buf, int count)
     }
     if ((response & 0x1f) != 0x05) {
         dprintf(("SD Card: write512: token is %02x\n\r", response));
+        if ((response & 0x1f) == 0x0b) {
+            dprintf(("SD Card: write512: CRC error (retry=%d)\n\r", retry));
+            if (--retry < 1) {
+                result = SDCARD_CRC_ERROR;
+                goto done;
+            }
+            __SDCard_wait_response(0xff, 30000);
+            SPI_end_transaction();
+            goto retry;
+        }
         result = SDCARD_BADRESPONSE;
         goto done;
     }
 
-    response = __SDCard_wait_response(0x00, 3000);
+    response = __SDCard_wait_response(0x00, 30000);
     if (response == 0x00) {
         dprintf(("SD Card: write512: timeout, response is %02x\n\r", response));
         result = SDCARD_TIMEOUT;
@@ -259,3 +317,25 @@ uint8_t SDCard_crc(void *buf, int count)
 
     return crc;
 }
+
+uint16_t __SDCard_crc16(uint16_t crc, void *buf, int count)
+{
+    uint8_t *p = (uint8_t*)buf;
+    uint8_t *endp = p + count;
+
+    while (p < endp) {
+        crc = (crc >> 8)|(crc << 8);
+        crc ^= *p++;
+        crc ^= ((crc & 0xff) >> 4);
+        crc ^= (crc << 12);
+        crc ^= ((crc & 0xff) << 5);
+    }
+
+    return crc;
+}
+
+uint16_t SDCard_crc16(void *buf, int count)
+{
+    return __SDCard_crc16(0, buf, count);
+}
+
